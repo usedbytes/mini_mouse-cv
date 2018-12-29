@@ -157,3 +157,59 @@ func DeltaC(a, b color.Color) uint8 {
 
 	return DeltaCNRGBA(aNRGBA, bNRGBA)
 }
+
+func DeltaCByRow(in image.Image) *image.Gray {
+	w, h := in.Bounds().Dx(), in.Bounds().Dy()
+	var out *image.Gray
+
+	switch v := in.(type) {
+	case *image.YCbCr:
+		hsub, vsub := 1, 1
+		switch v.SubsampleRatio {
+		case image.YCbCrSubsampleRatio422:
+			hsub, vsub = 2, 1
+		case image.YCbCrSubsampleRatio420:
+			hsub, vsub = 2, 2
+		}
+		cols, rows := w / hsub, h / vsub
+		out = image.NewGray(image.Rect(0, 0, cols, rows - 1))
+		for x := 0; x < w; x += hsub {
+			for y := 0; y < h - 1; y += vsub {
+				s, d := v.YCbCrAt(x, y), v.YCbCrAt(x, y + vsub)
+				diff := color.Gray{DeltaC(s, d)}
+				out.SetGray(x / hsub, y / vsub, diff)
+			}
+		}
+	default:
+		_ = v
+		out = image.NewGray(image.Rect(0, 0, w, h - 1))
+		for x := 0; x < w; x++ {
+			for y := 0; y < h - 1; y++ {
+				diff := color.Gray{DeltaC(in.At(x, y), in.At(x, y + 1))}
+				out.SetGray(x, y, diff)
+			}
+		}
+	}
+
+	return out
+}
+
+func FindHorizontalLines(img *image.Gray) *image.Gray {
+	w, h := img.Bounds().Dx(), img.Bounds().Dy()
+	stripeH := int(float64(h) / 16)
+	scale := 255.0 / float64(w * stripeH)
+
+	sums := SumLines(img)
+
+	out := image.NewGray(image.Rect(0, 0, 1, h))
+	for y := h - (stripeH / 2) - 1; y > (stripeH / 2) + 1; y-- {
+		sum := 0
+		for j := 0; j < stripeH; j++ {
+			sum += sums[y + (stripeH / 2) - j]
+		}
+
+		out.Set(0, y, color.Gray{uint8(float64(sum) * scale)})
+	}
+
+	return out
+}
