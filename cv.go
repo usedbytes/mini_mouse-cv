@@ -6,6 +6,91 @@ import (
 	"math"
 )
 
+type Tuple struct {
+	First, Second int
+}
+
+func FindBlobs(pix []uint8) []Tuple {
+	ret := make([]Tuple, 0, 3)
+
+	for i := 0; i < len(pix); i++ {
+		v := pix[i]
+		if v == 0 {
+			continue
+		}
+
+		t := i
+		if i > 0 {
+			t = i - 1
+		}
+
+		ret = append(ret, Tuple{ First: t })
+
+		if i < len(pix) - 1 {
+			for j := i + 1; j < len(pix); j++ {
+				v = pix[j]
+				if v > 0 && j < len(pix) - 1 {
+					continue
+				}
+
+				ret[len(ret) - 1].Second = j
+				i = j + 1
+				break
+			}
+		} else {
+			ret[len(ret) - 1].Second = i
+		}
+	}
+
+	return ret
+}
+
+func Mean(vals []uint8) uint8 {
+	a := 0
+	for _, v := range vals {
+		a += int(v)
+	}
+	return uint8(a / len(vals))
+}
+
+func AverageDeltaC(in image.Image, rowA, rowB int) uint8 {
+	w := in.Bounds().Dx()
+
+	total := 0
+
+	switch v := in.(type) {
+	case *image.YCbCr:
+		hsub, vsub := 1, 1
+		switch v.SubsampleRatio {
+		case image.YCbCrSubsampleRatio422:
+			hsub, vsub = 2, 1
+		case image.YCbCrSubsampleRatio420:
+			hsub, vsub = 2, 2
+		}
+		rowA *= vsub
+		rowB *= vsub
+
+		for x := 0; x < w; x += hsub {
+			ySamples := (rowB - rowA) / vsub
+			if ySamples == 0 {
+				ySamples++
+			}
+			s, d := v.YCbCrAt(x, rowA), v.YCbCrAt(x, rowA + vsub * ySamples)
+			diff := color.Gray{DeltaC(s, d)}
+			total += int(diff.Y)
+		}
+		total *= hsub
+	default:
+		_ = v
+		for x := 0; x < w; x++ {
+			diff := color.Gray{DeltaC(in.At(x, rowA), in.At(x, rowB))}
+			total += int(diff.Y)
+		}
+	}
+
+	return uint8(total / w)
+}
+
 type RawYCbCrColor struct {
 	color.YCbCr
 }

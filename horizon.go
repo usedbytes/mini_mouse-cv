@@ -15,13 +15,21 @@ func FindHorizon(img image.Image) float32 {
 	summed := FindHorizontalLines(diff)
 	minMax = MinMaxColwise(summed)
 	ExpandContrastColWise(summed, minMax)
-	Threshold(summed, 180)
+	Threshold(summed, 128)
 
-	h := summed.Bounds().Dy()
-	for y := h - 1; y >= 0; y-- {
-		g := summed.GrayAt(0, y).Y
-		if g > 0 {
-			return float32(h - y) / float32(h)
+	blobs := FindBlobs(summed.Pix)
+
+	avgs := make([]uint8, 0, len(blobs))
+	for _, b := range blobs {
+		avgs = append(avgs, AverageDeltaC(img, b.First, b.Second))
+	}
+	meanAvg := Mean(avgs)
+
+	for i := len(avgs) - 1; i >= 0; i-- {
+		a := avgs[i]
+		b := blobs[i]
+		if a >= meanAvg {
+			return float32((b.First + b.Second) / 2) / float32(len(summed.Pix))
 		}
 	}
 
