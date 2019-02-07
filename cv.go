@@ -123,12 +123,12 @@ func MinMaxColwise(img *image.Gray) []image.Point {
 	for i := 0; i < w; i++ {
 		var min, max uint8 = 255, 0
 		for j := 0; j < h; j++ {
-			pix := img.At(i, j).(color.Gray)
-			if pix.Y < min {
-				min = pix.Y
+			pix := img.Pix[j * img.Stride + i]
+			if pix < min {
+				min = pix
 			}
-			if pix.Y > max {
-				max = pix.Y
+			if pix > max {
+				max = pix
 			}
 		}
 		ret[i] = image.Pt(int(max), int(min))
@@ -142,11 +142,10 @@ func ExpandContrastColWise(img *image.Gray, minMax []image.Point) {
 
 	for i := 0; i < w; i++ {
 		scale := 255.0 / float32(minMax[i].X - minMax[i].Y)
-
 		for j := 0; j < h; j++ {
-			pix := img.At(i, j).(color.Gray)
-			newVal := float32(pix.Y - uint8(minMax[i].Y)) * scale
-			img.Set(i, j, color.Gray{uint8(newVal)})
+			pix := img.Pix[j * img.Stride + i]
+			newVal := float32(pix - uint8(minMax[i].Y)) * scale
+			img.Pix[j * img.Stride + i] = uint8(newVal)
 		}
 	}
 }
@@ -155,12 +154,13 @@ func Threshold(img *image.Gray, threshold uint8) {
 	w, h := img.Bounds().Dx(), img.Bounds().Dy()
 
 	for i := 0; i < h; i++ {
+		row := img.Pix[i * img.Stride:i * img.Stride + w]
 		for j := 0; j < w; j++ {
-			pix := img.At(j, i).(color.Gray)
-			if pix.Y >= threshold {
-				img.Set(j, i, color.Gray{255})
+			pix := row[j]
+			if pix >= threshold {
+				row[j] = 255
 			} else {
-				img.Set(j, i, color.Gray{0})
+				row[j] = 0
 			}
 		}
 	}
@@ -258,11 +258,18 @@ func DeltaCByRow(in image.Image) *image.Gray {
 		}
 		cols, rows := w / hsub, h / vsub
 		out = image.NewGray(image.Rect(0, 0, cols, rows - 1))
-		for x := 0; x < w; x += hsub {
-			for y := 0; y < h - 1; y += vsub {
-				s, d := v.YCbCrAt(x, y), v.YCbCrAt(x, y + vsub)
-				diff := color.Gray{DeltaC(s, d)}
-				out.SetGray(x / hsub, y / vsub, diff)
+		for x, subx := 0, 0; x < w; x, subx = x + hsub, subx + 1 {
+			for y, suby := 0, 0; y < h - vsub; y, suby = y + vsub, suby + 1 {
+				yoff := v.YOffset(x, y)
+				coff := v.COffset(x, y)
+				s := color.YCbCr{ Y: v.Y[yoff], Cb: v.Cb[coff], Cr: v.Cr[coff] }
+
+				yoff += v.YStride
+				coff += v.CStride
+				d := color.YCbCr{ Y: v.Y[yoff], Cb: v.Cb[coff], Cr: v.Cr[coff] }
+
+				diff := DeltaCYCbCr(s, d)
+				out.Pix[suby * out.Stride + subx] = diff
 			}
 		}
 	default:
