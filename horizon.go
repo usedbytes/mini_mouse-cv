@@ -30,7 +30,7 @@ func FindHorizon(img image.Image) float32 {
 		a := avgs[i]
 		b := blobs[i]
 		if a >= meanAvg {
-			return float32((b.First + b.Second) / 2) / float32(len(summed.Pix))
+			return float32((b.First + b.Second + 1) / 2) / float32(len(summed.Pix))
 		}
 	}
 
