@@ -264,7 +264,7 @@ func DeltaCByRow(in image.Image) *image.Gray {
 				coff := v.COffset(x, y)
 				s := color.YCbCr{ Y: v.Y[yoff], Cb: v.Cb[coff], Cr: v.Cr[coff] }
 
-				yoff += v.YStride
+				yoff += v.YStride * vsub
 				coff += v.CStride
 				d := color.YCbCr{ Y: v.Y[yoff], Cb: v.Cb[coff], Cr: v.Cr[coff] }
 
