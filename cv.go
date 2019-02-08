@@ -54,7 +54,7 @@ func Mean(vals []uint8) uint8 {
 }
 
 func AverageDeltaC(in image.Image, rowA, rowB int) uint8 {
-	w := in.Bounds().Dx()
+	w, h := in.Bounds().Dx(), in.Bounds().Dy()
 
 	total := 0
 
@@ -67,17 +67,26 @@ func AverageDeltaC(in image.Image, rowA, rowB int) uint8 {
 		case image.YCbCrSubsampleRatio420:
 			hsub, vsub = 2, 2
 		}
-		rowA *= vsub
-		rowB *= vsub
 
-		for x := 0; x < w; x += hsub {
-			ySamples := (rowB - rowA) / vsub
-			if ySamples == 0 {
-				ySamples++
+		if rowB - rowA < vsub {
+			if rowA > vsub {
+				rowA -= vsub - 1
+			} else if rowB < h - vsub {
+				rowB += vsub - 1
 			}
-			s, d := v.YCbCrAt(x, rowA), v.YCbCrAt(x, rowA + vsub * ySamples)
-			diff := color.Gray{DeltaC(s, d)}
-			total += int(diff.Y)
+		}
+
+		startYA := v.YOffset(0, rowA)
+		startCA := v.COffset(0, rowA)
+		startYB := v.YOffset(0, rowB)
+		startCB := v.COffset(0, rowB)
+
+		for x, subx := 0, 0; x < w; x, subx = x + hsub, subx + 1 {
+			s := color.YCbCr{ Y: v.Y[startYA + x], Cb: v.Cb[startCA + subx], Cr: v.Cr[startCA + subx] }
+			d := color.YCbCr{ Y: v.Y[startYB + x], Cb: v.Cb[startCB + subx], Cr: v.Cr[startCB + subx] }
+
+			diff := DeltaC(s, d)
+			total += int(diff)
 		}
 		total *= hsub
 	default:

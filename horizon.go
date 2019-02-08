@@ -18,10 +18,11 @@ func FindHorizon(img image.Image) float32 {
 	Threshold(summed, 128)
 
 	blobs := FindBlobs(summed.Pix)
+	scale := img.Bounds().Dy() / len(summed.Pix)
 
 	avgs := make([]uint8, 0, len(blobs))
 	for _, b := range blobs {
-		avgs = append(avgs, AverageDeltaC(img, b.First, b.Second))
+		avgs = append(avgs, AverageDeltaC(img, b.First * scale, b.Second * scale))
 	}
 	meanAvg := Mean(avgs)
 
