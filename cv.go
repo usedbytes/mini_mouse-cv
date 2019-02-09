@@ -146,6 +146,28 @@ func MinMaxColwise(img *image.Gray) []image.Point {
 	return ret
 }
 
+func MinMaxRowwise(img *image.Gray) []image.Point {
+	ret := make([]image.Point, img.Bounds().Dy())
+	w, h := img.Bounds().Dx(), img.Bounds().Dy()
+	cpp := 1
+
+	for i := 0; i < h; i++ {
+		var min, max uint8 = 255, 0
+		row := img.Pix[img.Stride * i : img.Stride * i + w]
+		for j := 0; j < w * cpp; j += cpp {
+			if row[j] < min {
+				min = row[j]
+			}
+			if row[j] > max {
+				max = row[j]
+			}
+		}
+		ret[i] = image.Pt(int(max), int(min))
+	}
+
+	return ret
+}
+
 func ExpandContrastColWise(img *image.Gray, minMax []image.Point) {
 	w, h := img.Bounds().Dx(), img.Bounds().Dy()
 
@@ -155,6 +177,19 @@ func ExpandContrastColWise(img *image.Gray, minMax []image.Point) {
 			pix := img.Pix[j * img.Stride + i]
 			newVal := float32(pix - uint8(minMax[i].Y)) * scale
 			img.Pix[j * img.Stride + i] = uint8(newVal)
+		}
+	}
+}
+
+func ExpandContrastRowWise(img *image.Gray, minMax []image.Point) {
+	w, h := img.Bounds().Dx(), img.Bounds().Dy()
+
+	for i := 0; i < h; i++ {
+		scale := 255.0 / float32(minMax[i].X - minMax[i].Y)
+		for j := 0; j < w; j++ {
+			pix := img.Pix[i * img.Stride + j]
+			newVal := float32(pix - uint8(minMax[i].Y)) * scale
+			img.Pix[i * img.Stride + j] = uint8(newVal)
 		}
 	}
 }
@@ -187,6 +222,23 @@ func SumLines(img *image.Gray) []int {
 			}
 		}
 		sums[y] = sum
+	}
+
+	return sums
+}
+
+func SumColumns(img *image.Gray) []int {
+	w, h := img.Bounds().Dx(), img.Bounds().Dy()
+
+	sums := make([]int, w)
+	for x := 0; x < w; x++ {
+		sum := 0
+		for y := 0; y < h; y++ {
+			if img.GrayAt(x, y).Y > 0 {
+				sum++
+			}
+		}
+		sums[x] = sum
 	}
 
 	return sums
@@ -295,6 +347,48 @@ func DeltaCByRow(in image.Image) *image.Gray {
 	return out
 }
 
+func DeltaCByCol(in image.Image) *image.Gray {
+	w, h := in.Bounds().Dx(), in.Bounds().Dy()
+	var out *image.Gray
+
+	switch v := in.(type) {
+	case *image.YCbCr:
+		hsub, vsub := 1, 1
+		switch v.SubsampleRatio {
+		case image.YCbCrSubsampleRatio422:
+			hsub, vsub = 2, 1
+		case image.YCbCrSubsampleRatio420:
+			hsub, vsub = 2, 2
+		}
+		cols, rows := w / hsub, h / vsub
+		out = image.NewGray(image.Rect(0, 0, cols - 1, rows))
+
+		for y, suby := 0, 0; y < h; y, suby = y + vsub, suby + 1 {
+			for x, subx := 0, 0; x < w - hsub; x, subx = x + hsub, subx + 1 {
+				yoff := v.YOffset(x, y)
+				coff := v.COffset(x, y)
+
+				s := color.YCbCr{ Y: v.Y[yoff], Cb: v.Cb[coff], Cr: v.Cr[coff] }
+				d := color.YCbCr{ Y: v.Y[yoff + hsub], Cb: v.Cb[coff + 1], Cr: v.Cr[coff + 1] }
+				diff := DeltaCYCbCr(s, d)
+				out.Pix[suby * out.Stride + subx] = diff
+			}
+		}
+
+	default:
+		_ = v
+		out = image.NewGray(image.Rect(0, 0, w, h - 1))
+		for y := 0; y < h; y++ {
+			for x := 0; x < w - 1; x++ {
+				diff := color.Gray{DeltaC(in.At(x, y), in.At(x + 1, y))}
+				out.SetGray(x, y, diff)
+			}
+		}
+	}
+
+	return out
+}
+
 func FindHorizontalLines(img *image.Gray) *image.Gray {
 	w, h := img.Bounds().Dx(), img.Bounds().Dy()
 	stripeH := int(float64(h) / 16)
@@ -310,6 +404,26 @@ func FindHorizontalLines(img *image.Gray) *image.Gray {
 		}
 
 		out.Set(0, y, color.Gray{uint8(float64(sum) * scale)})
+	}
+
+	return out
+}
+
+func FindVerticalLines(img *image.Gray) *image.Gray {
+	w := img.Bounds().Dx()
+	stripeW := int(float64(w) / 16)
+	scale := 255.0 / float64(w * stripeW)
+
+	sums := SumColumns(img)
+
+	out := image.NewGray(image.Rect(0, 0, w, 1))
+	for x := (stripeW / 2); x < w - (stripeW / 2); x++ {
+		sum := 0
+		for j := 0; j < stripeW; j++ {
+			sum += sums[x - (stripeW / 2) + j]
+		}
+
+		out.Set(x, 0, color.Gray{uint8(float64(sum) * scale)})
 	}
 
 	return out
