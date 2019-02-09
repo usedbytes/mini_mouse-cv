@@ -20,6 +20,10 @@ func FindHorizon(img image.Image) float32 {
 	blobs := FindBlobs(summed.Pix)
 	scale := img.Bounds().Dy() / len(summed.Pix)
 
+	if len(blobs) == 0 {
+		return float32(math.NaN())
+	}
+
 	avgs := make([]uint8, 0, len(blobs))
 	for _, b := range blobs {
 		avgs = append(avgs, AverageDeltaC(img, b.First * scale, b.Second * scale))
