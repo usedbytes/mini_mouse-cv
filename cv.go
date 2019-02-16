@@ -393,9 +393,23 @@ func DeltaCByCol(in image.Image) *image.Gray {
 	return out
 }
 
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 func FindHorizontalLines(img *image.Gray) *image.Gray {
 	w, h := img.Bounds().Dx(), img.Bounds().Dy()
-	stripeH := int(float64(h) / 16)
+	stripeH := max(1, int(float64(h) / 32))
 	scale := 255.0 / float64(w * stripeH)
 
 	sums := SumLines(img)
@@ -414,14 +428,15 @@ func FindHorizontalLines(img *image.Gray) *image.Gray {
 }
 
 func FindVerticalLines(img *image.Gray) *image.Gray {
-	w := img.Bounds().Dx()
-	stripeW := int(float64(w) / 16)
-	scale := 255.0 / float64(w * stripeW)
+	w, h := img.Bounds().Dx(), img.Bounds().Dy()
+	stripeW := max(1, int(float64(w) / 32))
+	scale := 255.0 / float64(h * stripeW)
 
 	sums := SumColumns(img)
 
 	out := image.NewGray(image.Rect(0, 0, w, 1))
 	for x := (stripeW / 2); x < w - (stripeW / 2); x++ {
+
 		sum := 0
 		for j := 0; j < stripeW; j++ {
 			sum += sums[x - (stripeW / 2) + j]
