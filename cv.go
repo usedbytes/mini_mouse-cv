@@ -6,6 +6,10 @@ import (
 	"math"
 )
 
+func ImageDims(img image.Image) (w, h int) {
+	return img.Bounds().Dx(), img.Bounds().Dy()
+}
+
 type Tuple struct {
 	First, Second int
 }
