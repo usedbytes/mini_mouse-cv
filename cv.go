@@ -104,6 +104,53 @@ func AverageDeltaC(in image.Image, rowA, rowB int) uint8 {
 	return uint8(total / w)
 }
 
+func AverageDeltaCROI(in image.Image, rowA, rowB int, roi image.Rectangle) uint8 {
+	w, h := roi.Dx(), in.Bounds().Dy()
+
+	total := 0
+
+	switch v := in.(type) {
+	case *image.YCbCr:
+		hsub, vsub := 1, 1
+		switch v.SubsampleRatio {
+		case image.YCbCrSubsampleRatio422:
+			hsub, vsub = 2, 1
+		case image.YCbCrSubsampleRatio420:
+			hsub, vsub = 2, 2
+		}
+
+		if rowB - rowA < vsub {
+			if rowA > vsub {
+				rowA -= vsub - 1
+			} else if rowB < h - vsub {
+				rowB += vsub - 1
+			}
+		}
+
+		startYA := v.YOffset(roi.Min.X, rowA)
+		startCA := v.COffset(roi.Min.X, rowA)
+		startYB := v.YOffset(roi.Min.X, rowB)
+		startCB := v.COffset(roi.Min.X, rowB)
+
+		for x, subx := 0, 0; x < w; x, subx = x + hsub, subx + 1 {
+			s := color.YCbCr{ Y: v.Y[startYA + x], Cb: v.Cb[startCA + subx], Cr: v.Cr[startCA + subx] }
+			d := color.YCbCr{ Y: v.Y[startYB + x], Cb: v.Cb[startCB + subx], Cr: v.Cr[startCB + subx] }
+
+			diff := DeltaC(s, d)
+			total += int(diff)
+		}
+		total *= hsub
+	default:
+		_ = v
+		for x := 0; x < w; x++ {
+			diff := color.Gray{DeltaC(in.At(x + roi.Min.X, rowA), in.At(x + roi.Min.X, rowB))}
+			total += int(diff.Y)
+		}
+	}
+
+	return uint8(total / w)
+}
+
 type RawYCbCrColor struct {
 	color.YCbCr
 }
@@ -343,6 +390,49 @@ func DeltaCByRow(in image.Image) *image.Gray {
 		for x := 0; x < w; x++ {
 			for y := 0; y < h - 1; y++ {
 				diff := color.Gray{DeltaC(in.At(x, y), in.At(x, y + 1))}
+				out.SetGray(x, y, diff)
+			}
+		}
+	}
+
+	return out
+}
+
+func DeltaCByRowROI(in image.Image, roi image.Rectangle) *image.Gray {
+	w, h := roi.Dx(), roi.Dy()
+	var out *image.Gray
+
+	switch v := in.(type) {
+	case *image.YCbCr:
+		hsub, vsub := 1, 1
+		switch v.SubsampleRatio {
+		case image.YCbCrSubsampleRatio422:
+			hsub, vsub = 2, 1
+		case image.YCbCrSubsampleRatio420:
+			hsub, vsub = 2, 2
+		}
+		cols, rows := w / hsub, h / vsub
+		out = image.NewGray(image.Rect(0, 0, cols, rows - 1))
+		for x, subx := 0, 0; x < w; x, subx = x + hsub, subx + 1 {
+			for y, suby := 0, 0; y < h - vsub; y, suby = y + vsub, suby + 1 {
+				yoff := v.YOffset(x + roi.Min.X, y + roi.Min.Y)
+				coff := v.COffset(x + roi.Min.X, y + roi.Min.Y)
+				s := color.YCbCr{ Y: v.Y[yoff], Cb: v.Cb[coff], Cr: v.Cr[coff] }
+
+				yoff += v.YStride * vsub
+				coff += v.CStride
+				d := color.YCbCr{ Y: v.Y[yoff], Cb: v.Cb[coff], Cr: v.Cr[coff] }
+
+				diff := DeltaCYCbCr(s, d)
+				out.Pix[suby * out.Stride + subx] = diff
+			}
+		}
+	default:
+		_ = v
+		out = image.NewGray(image.Rect(0, 0, w, h - 1))
+		for x := 0; x < w; x++ {
+			for y := 0; y < h - 1; y++ {
+				diff := color.Gray{DeltaC(in.At(x + roi.Min.X, y + roi.Min.Y), in.At(x + roi.Min.X, y + roi.Min.Y + 1))}
 				out.SetGray(x, y, diff)
 			}
 		}
