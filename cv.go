@@ -155,6 +155,41 @@ func AverageDeltaCROI(in image.Image, rowA, rowB int, roi image.Rectangle) uint8
 	return uint8(total / w)
 }
 
+func AverageDeltaCROIConst(in image.Image, row int, d color.Color, roi image.Rectangle) uint8 {
+	w, _ := roi.Dx(), in.Bounds().Dy()
+
+	total := 0
+
+	switch v := in.(type) {
+	case *image.YCbCr:
+		hsub, _ := 1, 1
+		switch v.SubsampleRatio {
+		case image.YCbCrSubsampleRatio422:
+			hsub, _ = 2, 1
+		case image.YCbCrSubsampleRatio420:
+			hsub, _ = 2, 2
+		}
+
+		startYA := v.YOffset(roi.Min.X, row)
+		startCA := v.COffset(roi.Min.X, row)
+
+		for x, subx := 0, 0; x < w; x, subx = x + hsub, subx + 1 {
+			s := color.YCbCr{ Y: v.Y[startYA + x], Cb: v.Cb[startCA + subx], Cr: v.Cr[startCA + subx] }
+			diff := DeltaC(s, d)
+			total += int(diff)
+		}
+		total *= hsub
+	default:
+		_ = v
+		for x := 0; x < w; x++ {
+			diff := color.Gray{DeltaC(in.At(x + roi.Min.X, row), d)}
+			total += int(diff.Y)
+		}
+	}
+
+	return uint8(total / w)
+}
+
 type RawYCbCrColor struct {
 	color.YCbCr
 }
