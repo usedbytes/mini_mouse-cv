@@ -357,9 +357,10 @@ func DeltaCNRGBA(a, b color.NRGBA) uint8 {
 
 func DeltaCYCbCr(a, b color.YCbCr) uint8 {
 	// FIXME: What do?
+	ydiff := float64(absdiff_uint8(a.Y, b.Y)) / 255.0
 	cbdiff := float64(absdiff_uint8(a.Cb, b.Cb)) / 255.0
 	crdiff := float64(absdiff_uint8(a.Cr, b.Cr)) / 255.0
-	return uint8(math.Sqrt(cbdiff * cbdiff + crdiff * crdiff) * 255.0)
+	return uint8(math.Sqrt(ydiff *ydiff + cbdiff * cbdiff + crdiff * crdiff) * 255.0)
 }
 
 func DeltaC(a, b color.Color) uint8 {
