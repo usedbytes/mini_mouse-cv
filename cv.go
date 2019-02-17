@@ -6,6 +6,10 @@ import (
 	"math"
 )
 
+func RoundUp(a, to int) int {
+	return int((uint32(a) + uint32(to - 1)) & ^uint32(to - 1))
+}
+
 func ImageDims(img image.Image) (w, h int) {
 	return img.Bounds().Dx(), img.Bounds().Dy()
 }
